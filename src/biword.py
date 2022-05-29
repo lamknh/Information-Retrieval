@@ -7,121 +7,114 @@ from konlpy.corpus import kolaw
 from parse import *
 import operator
 
-DOC_SIZE = 102
+DOC_SIZE = 100
+# 형태소 분석기
 okt = Okt()
 
+query = '미국'
+
 sieve_list = ['Noun', 'Verb', 'Number']
-voca = {}
-doc = []
-f = open('/Users/yong/AI/search_engine/corpus.txt', 'r')
+voca = {} # 단어 당 나온 docID
+doc = [] # docID, title, content 저장
+f = open('/Users/nahyeongkim/Information-Retrieval/src/corpus.txt', 'r')
 i = 0
 doc_num = -1
 
 with open('src/corpus.txt', 'r', encoding='utf-8') as f:
+    # 한 줄씩 읽기
     line = f.readlines()
 
+    # xml 파싱
     for l in line:
         if l == '\n':
             continue
         elif l[0:7] == '<title>':
             doc_contents = parse('<title>{docID}. {title}</title>\n', l)
-            doc.append(doc_contents.named)
-            doc_num += 1
+            # parse 결과 딕셔너리 doc 리스트에 저장
+            if doc_contents is not None:
+                doc.append(doc_contents.named)
+                doc_num += 1
         else:
+            # doc 내용 저장
             doc[doc_num]['content'] = l
 
-# contents : 'docID', 'title', 'content'
-# o_list : ['형태소', 'pos'] 
-# voca : {'term': []}
-
+# title 검색
 for contents in doc:
-    o_list = okt.pos(contents['content'])
-    
-    for morphs in o_list:
-        is_empty = voca.get(morphs[0])
-
-        if morphs[1] == 'Noun':
-            if is_empty == None:
-                voca[morphs[0]] = []
-            voca[morphs[0]].append(int(contents['docID']))
-        elif morphs[1] == 'Verb':
-            if is_empty == None:
-                voca[morphs[0]] = []
-            voca[morphs[0]].append(int(contents['docID']))
-        elif morphs[1] == 'Number':
-            if is_empty == None:
-                voca[morphs[0]] = []
-            voca[morphs[0]].append(int(contents['docID']))
-
-#title도 형태소 분석하여 term frequency의 요소로 취급.
-for contents in doc:
+    # 텍스트에 품사 정보 붙여 반환
     title_list = okt.pos(contents['title'])
-    
+
     for morphs in title_list:
-        is_empty = voca.get(morphs[0])
+        # 형태소 morphs[0] : 형태소, morphs[1] : 형태소 분류, docCnt : 나온 doc ID
+        docCnt = voca.get(morphs[0])
 
-        if morphs[1] == 'Noun':
-            if is_empty == None:
-                voca[morphs[0]] = []
-            voca[morphs[0]].append(int(contents['docID']))
-        elif morphs[1] == 'Verb':
-            if is_empty == None:
-                voca[morphs[0]] = []
-            voca[morphs[0]].append(int(contents['docID']))
-        elif morphs[1] == 'Number':
-            if is_empty == None:
+        # 명사, 숫자만 저장, 조사 등 의미없는 형태소는 저장 x or morphs[1] == 'Verb' : 로 동사 저장할지?
+        if morphs[1] == 'Noun' or morphs[1] == 'Number':
+            if docCnt == None:
                 voca[morphs[0]] = []
             voca[morphs[0]].append(int(contents['docID']))
 
-#print('voca: ', voca['1874'])
-#biwords voca에 추가.
+# content 검색
 for contents in doc:
-    o_list = okt.pos(contents['content'])
-    sieved_list = [morphs for morphs in o_list if morphs[1] in sieve_list]
+    pos_list = okt.pos(contents['content'])
 
-    idx = 0
-    biwords_space = ''
-    biwords_no_space = ''
+    for morphs in pos_list:
+        docCnt = voca.get(morphs[0])
 
-    len_s_list = len(sieved_list)
-    while(idx < len_s_list-1):
-        pre_biwords = sieved_list[idx:idx+2]
-        biwords_space = pre_biwords[0][0] + ' ' + pre_biwords[1][0]
-        biwords_no_space = pre_biwords[0][0] + pre_biwords[1][0]
+        # 명사, 숫자만 저장, 조사 등 의미없는 형태소는 저장 x or morphs[1] == 'Verb' : 로 동사 저장할지?
+        if morphs[1] == 'Noun' or morphs[1] == 'Number':
+            if docCnt == None:
+                voca[morphs[0]] = []
+            voca[morphs[0]].append(int(contents['docID']))
 
-        #print(biwords_space)
-        #print(biwords_no_space)
-        is_empty = voca.get(biwords_space)
-        is_empty_no_space = voca.get(biwords_no_space)
+#biwords voca에 추가.
+# for contents in doc:
+#     o_list = okt.pos(contents['content'])
+#     sieved_list = [morphs for morphs in o_list if morphs[1] in sieve_list]
+#
+#     idx = 0
+#     biwords_space = ''
+#     biwords_no_space = ''
+#
+#     len_s_list = len(sieved_list)
+#     while(idx < len_s_list-1):
+#         pre_biwords = sieved_list[idx:idx+2]
+#         biwords_space = pre_biwords[0][0] + ' ' + pre_biwords[1][0]
+#         biwords_no_space = pre_biwords[0][0] + pre_biwords[1][0]
+#
+#         #print(biwords_space)
+#         #print(biwords_no_space)
+#         is_empty = voca.get(biwords_space)
+#         is_empty_no_space = voca.get(biwords_no_space)
+#
+#         if is_empty == None:
+#             voca[biwords_space] = []
+#
+#         if is_empty_no_space == None:
+#             voca[biwords_no_space] = []
+#
+#         voca[biwords_space].append(int(contents['docID']))
+#         voca[biwords_no_space].append(int(contents['docID']))
+#
+#         idx += 1
 
-        if is_empty == None:
-            voca[biwords_space] = []
-        
-        if is_empty_no_space == None:
-            voca[biwords_no_space] = []
-
-        voca[biwords_space].append(int(contents['docID']))
-        voca[biwords_no_space].append(int(contents['docID']))
-
-        idx += 1
-
+# tf-idf 계산
 tf_matrix = {}
 
-#calculate term frequency for document
-for term, doc_list in voca.items():
+# TF 계산
+for term, docList in voca.items():
     tf_matrix[term] = [0] * DOC_SIZE
-    for i in range(len(doc_list)):    
-        tf_matrix[term][doc_list[i]-1] += 1
+    for i in range(len(docList)):
+        tf_matrix[term][docList[i]-1] += 1
 
-for term, doc_list in tf_matrix.items():
-    for i in range(len(doc_list)):
-        if doc_list[i] == 0:
+for term, docList in tf_matrix.items():
+    for i in range(len(docList)):
+        if docList[i] == 0:
             continue
-        doc_list[i] = 1+math.log10(doc_list[i]) 
+        docList[i] = 1+math.log10(docList[i])
 
 #caculate idf
-for term, doc_list in voca.items():
-    voca[term] = copy.deepcopy(set(doc_list))
+for term, docList in voca.items():
+    voca[term] = copy.deepcopy(set(docList))
 
     doc_freq = len(voca[term])
     voca[term] = list(voca[term])
@@ -130,7 +123,6 @@ for term, doc_list in voca.items():
 
 
 key_list = list(voca)
-query =  '미국'
 query_morphs = okt.pos(query)
 sieved_list = [morphs for morphs in query_morphs if morphs[1] in sieve_list]
 
@@ -218,7 +210,11 @@ tuple_score = []
 for doc_id, score in enumerate(score):
     tuple_score.append((doc_id+1, score))
 
+# rank 정렬
 tuple_score.sort(key = lambda x: x[1], reverse = True)
-print('weight_query: ', weight_query)
-print('query: ', query)
-print(tuple_score)
+# print('weight_query: ', weight_query)
+print(query, "에 대한 검색 결과 Rank ******")
+
+# rank 상위 5개 출력
+for rank in tuple_score[0:5]:
+    print(rank[0])
