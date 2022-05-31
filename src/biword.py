@@ -11,7 +11,7 @@ DOC_SIZE = 100
 # 형태소 분석기
 okt = Okt()
 
-query = '미국'
+query = '그리스'
 
 sieve_list = ['Noun', 'Verb', 'Number']
 voca = {} # 단어 당 나온 docID
@@ -66,7 +66,7 @@ for contents in doc:
                 voca[morphs[0]] = []
             voca[morphs[0]].append(int(contents['docID']))
 
-#biwords voca에 추가.
+#biwords voca에 추가할지?
 # for contents in doc:
 #     o_list = okt.pos(contents['content'])
 #     sieved_list = [morphs for morphs in o_list if morphs[1] in sieve_list]
@@ -100,34 +100,37 @@ for contents in doc:
 # tf-idf 계산
 tf_matrix = {}
 
-# TF 계산
+# tf 계산 : term이 doc에 몇 번 나타나는가? 횟수에 비례하지 않고 log 사용
 for term, docList in voca.items():
+    # 2차원 배열 사용
     tf_matrix[term] = [0] * DOC_SIZE
     for i in range(len(docList)):
+        # docID에서 term이 나오는 수 세기 (tf)
         tf_matrix[term][docList[i]-1] += 1
 
+# tf weight 계산
 for term, docList in tf_matrix.items():
     for i in range(len(docList)):
-        if docList[i] == 0:
-            continue
-        docList[i] = 1+math.log10(docList[i])
+        if docList[i] != 0:
+            # Wt,d = 1 + log10 tft,d
+            docList[i] = 1 + math.log10(docList[i])
 
-#caculate idf
+# idf 계산 : rare term more informative
 for term, docList in voca.items():
-    voca[term] = copy.deepcopy(set(docList))
+    # tf 세기
+    docFreq = len(docList)
 
-    doc_freq = len(voca[term])
+    voca[term] = copy.deepcopy(set(docList))
     voca[term] = list(voca[term])
     voca[term].sort()
-    voca[term].append(math.log10(DOC_SIZE/doc_freq))     #append idf
-
+    # idft = log10 (N/dft)
+    voca[term].append(math.log10(DOC_SIZE/docFreq))
 
 key_list = list(voca)
 query_morphs = okt.pos(query)
 sieved_list = [morphs for morphs in query_morphs if morphs[1] in sieve_list]
 
-
-#key_interests에는 query의 형태소 분해된 결과가 들어감. voca term이랑 일치
+# key_interests에는 query의 형태소 분해된 결과가 들어감. voca term이랑 일치
 key_interests = []
 query_vector = [0] * len(voca)
 score = [0] * DOC_SIZE
@@ -136,23 +139,13 @@ for morphs in query_morphs:
     if morphs[1] in sieve_list:
         key_interests.append(morphs[0])
 
-print('key_interest: ', key_interests)
+# print('key_interest: ', key_interests)
 idx = 0
-biwords_space = ''
-biwords_no_space = ''
+# biwords_space = ''
+# biwords_no_space = ''
 
 len_s_list = len(sieved_list)
 
-'''while(idx < len_s_list-1):
-    pre_biwords = sieved_list[idx:idx+2]
-    biwords_space = pre_biwords[0][0] + ' ' + pre_biwords[1][0]
-    biwords_no_space = pre_biwords[0][0] + pre_biwords[1][0]
-
-    key_interests.append(biwords_space)
-    key_interests.append(biwords_no_space)
-    idx += 2
-'''
-#container = []
 # VOCA의 차원과 query_verctor의 차원을 일치 시킨 후 query에 대한 term freq 계산.
 for i in range(len(key_interests)):
     query_vector[key_list.index(key_interests[i])] += 1
@@ -168,9 +161,9 @@ for i in range(len(query_vector)):
 l2_denorm = 0
 weight_query = []
 
-#voc_position은 query term의 voca 상의 위치를 나타냄.
-#weight_query에는  query term의 tf*idf 값에 대한 normalized(L2_norm)된 결과를 가짐.
-#key_interests list에는 query에 나타난 term들을 가짐.
+# voc_position은 query term의 voca 상의 위치를 나타냄.
+# weight_query에는  query term의 tf*idf 값에 대한 normalized(L2_norm)된 결과를 가짐.
+# key_interests list에는 query에 나타난 term들을 가짐.
 for i in range(len(key_interests)):
     voc_position = key_list.index(key_interests[i])
     tf_qterm = query_vector[voc_position]
