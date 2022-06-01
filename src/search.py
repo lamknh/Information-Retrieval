@@ -11,9 +11,9 @@ DOC_SIZE = 100
 # 형태소 분석기
 okt = Okt()
 
-query = '그리스'
+query = '아폴론 남매인 신의 이름은?'
 
-sieve_list = ['Noun', 'Verb', 'Number']
+morphList = ['Noun', 'Verb', 'Number']
 voca = {} # 단어 당 나온 docID
 doc = [] # docID, title, content 저장
 f = open('/Users/nahyeongkim/Information-Retrieval/src/corpus.txt', 'r')
@@ -47,8 +47,8 @@ for contents in doc:
         # 형태소 morphs[0] : 형태소, morphs[1] : 형태소 분류, docCnt : 나온 doc ID
         docCnt = voca.get(morphs[0])
 
-        # 명사, 숫자만 저장, 조사 등 의미없는 형태소는 저장 x or morphs[1] == 'Verb' : 로 동사 저장할지?
-        if morphs[1] == 'Noun' or morphs[1] == 'Number':
+        # 명사, 숫자, 동사만 저장, 조사 등 의미없는 형태소는 저장 x
+        if morphs[1] in morphList:
             if docCnt == None:
                 voca[morphs[0]] = []
             voca[morphs[0]].append(int(contents['docID']))
@@ -60,42 +60,13 @@ for contents in doc:
     for morphs in pos_list:
         docCnt = voca.get(morphs[0])
 
-        # 명사, 숫자만 저장, 조사 등 의미없는 형태소는 저장 x or morphs[1] == 'Verb' : 로 동사 저장할지?
-        if morphs[1] == 'Noun' or morphs[1] == 'Number':
+        # 명사, 숫자, 동사만 저장, 조사 등 의미없는 형태소는 저장 x
+        if morphs[1] in morphList:
             if docCnt == None:
                 voca[morphs[0]] = []
             voca[morphs[0]].append(int(contents['docID']))
 
 #biwords voca에 추가할지?
-# for contents in doc:
-#     o_list = okt.pos(contents['content'])
-#     sieved_list = [morphs for morphs in o_list if morphs[1] in sieve_list]
-#
-#     idx = 0
-#     biwords_space = ''
-#     biwords_no_space = ''
-#
-#     len_s_list = len(sieved_list)
-#     while(idx < len_s_list-1):
-#         pre_biwords = sieved_list[idx:idx+2]
-#         biwords_space = pre_biwords[0][0] + ' ' + pre_biwords[1][0]
-#         biwords_no_space = pre_biwords[0][0] + pre_biwords[1][0]
-#
-#         #print(biwords_space)
-#         #print(biwords_no_space)
-#         is_empty = voca.get(biwords_space)
-#         is_empty_no_space = voca.get(biwords_no_space)
-#
-#         if is_empty == None:
-#             voca[biwords_space] = []
-#
-#         if is_empty_no_space == None:
-#             voca[biwords_no_space] = []
-#
-#         voca[biwords_space].append(int(contents['docID']))
-#         voca[biwords_no_space].append(int(contents['docID']))
-#
-#         idx += 1
 
 # tf-idf 계산
 tf_matrix = {}
@@ -119,40 +90,34 @@ for term, docList in tf_matrix.items():
 for term, docList in voca.items():
     # tf 세기
     docFreq = len(docList)
-
-    voca[term] = copy.deepcopy(set(docList))
-    voca[term] = list(voca[term])
-    voca[term].sort()
     # idft = log10 (N/dft)
     voca[term].append(math.log10(DOC_SIZE/docFreq))
 
 key_list = list(voca)
-query_morphs = okt.pos(query)
-sieved_list = [morphs for morphs in query_morphs if morphs[1] in sieve_list]
 
-# key_interests에는 query의 형태소 분해된 결과가 들어감. voca term이랑 일치
-key_interests = []
+# 쿼리 형태소 분석
+query_morphs = okt.pos(query)
+queryList = [morphs for morphs in query_morphs if morphs[1] in morphList]
+
+query_key = [] # query의 형태소 분해된 결과
 query_vector = [0] * len(voca)
 score = [0] * DOC_SIZE
 
 for morphs in query_morphs:
-    if morphs[1] in sieve_list:
-        key_interests.append(morphs[0])
+    if morphs[1] in morphList:
+        query_key.append(morphs[0])
 
-# print('key_interest: ', key_interests)
 idx = 0
-# biwords_space = ''
-# biwords_no_space = ''
 
-len_s_list = len(sieved_list)
+len_s_list = len(queryList)
 
 # VOCA의 차원과 query_verctor의 차원을 일치 시킨 후 query에 대한 term freq 계산.
-for i in range(len(key_interests)):
-    query_vector[key_list.index(key_interests[i])] += 1
+for i in range(len(query_key)):
+    query_vector[key_list.index(query_key[i])] += 1
 
-key_interests = list(set(key_interests))
+query_key = list(set(query_key))
 
-#log 연산 취함.
+# log 연산
 for i in range(len(query_vector)):
     if query_vector[i] == 0:
         continue
@@ -163,24 +128,24 @@ weight_query = []
 
 # voc_position은 query term의 voca 상의 위치를 나타냄.
 # weight_query에는  query term의 tf*idf 값에 대한 normalized(L2_norm)된 결과를 가짐.
-# key_interests list에는 query에 나타난 term들을 가짐.
-for i in range(len(key_interests)):
-    voc_position = key_list.index(key_interests[i])
+# query_key list에는 query에 나타난 term들을 가짐.
+for i in range(len(query_key)):
+    voc_position = key_list.index(query_key[i])
     tf_qterm = query_vector[voc_position]
-    idf_qterm = voca[key_interests[i]][-1]
+    idf_qterm = voca[query_key[i]][-1]
 
-    weight_query.append({key_interests[i] : float(tf_qterm)*float(idf_qterm)})
+    weight_query.append({query_key[i] : float(tf_qterm)*float(idf_qterm)})
     #tf_qterm, idf_qterm 모두 log weight로 계산되어있음.
 
 for i in range(len(weight_query)):
-    l2_denorm += pow(weight_query[i][key_interests[i]], 2)
+    l2_denorm += pow(weight_query[i][query_key[i]], 2)
 
-#calculate normalized weight for query term
+# calculate normalized weight for query term
 for i in range(len(weight_query)):
-    weight_query[i][key_interests[i]] = weight_query[i][key_interests[i]] / pow(l2_denorm, 1/2)
+    weight_query[i][query_key[i]] = weight_query[i][query_key[i]] / pow(l2_denorm, 1/2)
 
-#doc에 대한 L2_norm 결과값 계산하는 부분
-#weight_query : {voca order : weight}
+# doc에 대한 L2_norm 결과값 계산하는 부분
+# weight_query : {voca order : weight}
 voca_keys = voca.keys()
 voca_keys = list(voca_keys)
 
@@ -195,9 +160,9 @@ for i in range(DOC_SIZE):
 
 doc_visit_set = []
 for i in range(len(weight_query)):
-    voc_position = key_list.index(key_interests[i])
-    for j in range(len(tf_matrix[key_interests[i]])):
-        score[j] = score[j] + (weight_query[i][key_interests[i]] * tf_matrix[key_interests[i]][j])
+    voc_position = key_list.index(query_key[i])
+    for j in range(len(tf_matrix[query_key[i]])):
+        score[j] = score[j] + (weight_query[i][query_key[i]] * tf_matrix[query_key[i]][j])
 
 tuple_score = []
 for doc_id, score in enumerate(score):
@@ -206,7 +171,7 @@ for doc_id, score in enumerate(score):
 # rank 정렬
 tuple_score.sort(key = lambda x: x[1], reverse = True)
 # print('weight_query: ', weight_query)
-print(query, "에 대한 검색 결과 Rank ******")
+print("'", query, "'에 대한 검색 결과 Rank ******")
 
 # rank 상위 5개 출력
 for rank in tuple_score[0:5]:
