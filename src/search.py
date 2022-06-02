@@ -107,72 +107,76 @@ for morphs in query_morphs:
     if morphs[1] in morphList:
         query_key.append(morphs[0])
 
-idx = 0
-
-len_s_list = len(queryList)
-
-# VOCA의 차원과 query_verctor의 차원을 일치 시킨 후 query에 대한 term freq 계산.
+# query tf 계산.
 for i in range(len(query_key)):
     query_vector[key_list.index(query_key[i])] += 1
 
-query_key = list(set(query_key))
-
-# log 연산
+# tf weight 계산
 for i in range(len(query_vector)):
-    if query_vector[i] == 0:
-        continue
-    query_vector[i] = 1+math.log10(query_vector[i])  #log freq weight
+    if query_vector[i] != 0:
+        # Wt,d = 1 + log10 tft,d
+        query_vector[i] = 1 + math.log10(query_vector[i])
 
-l2_denorm = 0
+# tf * idf 계산
 weight_query = []
 
-# voc_position은 query term의 voca 상의 위치를 나타냄.
-# weight_query에는  query term의 tf*idf 값에 대한 normalized(L2_norm)된 결과를 가짐.
-# query_key list에는 query에 나타난 term들을 가짐.
 for i in range(len(query_key)):
+    # query term 위치
     voc_position = key_list.index(query_key[i])
+    # query term의 tf, idf 값 가져오기
     tf_qterm = query_vector[voc_position]
     idf_qterm = voca[query_key[i]][-1]
 
-    weight_query.append({query_key[i] : float(tf_qterm)*float(idf_qterm)})
-    #tf_qterm, idf_qterm 모두 log weight로 계산되어있음.
+    # tf * idf 계산
+    weight_query.append({query_key[i] : float(tf_qterm) * float(idf_qterm)})
+
+# Length Normalization
+
+# query L2 norm 구하기
+L2_temp = 0
 
 for i in range(len(weight_query)):
-    l2_denorm += pow(weight_query[i][query_key[i]], 2)
+    L2_temp += pow(weight_query[i][query_key[i]], 2)
 
-# calculate normalized weight for query term
+query_L2_norm = pow(L2_temp, 1/2)
+
 for i in range(len(weight_query)):
-    weight_query[i][query_key[i]] = weight_query[i][query_key[i]] / pow(l2_denorm, 1/2)
+    weight_query[i][query_key[i]] = weight_query[i][query_key[i]] / query_L2_norm
 
-# doc에 대한 L2_norm 결과값 계산하는 부분
-# weight_query : {voca order : weight}
-voca_keys = voca.keys()
-voca_keys = list(voca_keys)
+# doc L2 norm 구하기
+voca_terms = list(voca.keys())
 
-df_l2_norm = 0
+doc_L2_norm = 0
 
 for i in range(DOC_SIZE):
+    L2_temp = 0
     for j in range(len(voca)):
-        df_l2_norm += pow(tf_matrix[voca_keys[j]][i],2)
-    df_l2_norm = pow(df_l2_norm, 1/2)
+        L2_temp += pow(tf_matrix[voca_terms[j]][i], 2)
+
+    doc_L2_norm = pow(L2_temp, 1/2)
+
     for k in range(len(voca)):
-        tf_matrix[voca_keys[k]][i] = tf_matrix[voca_keys[k]][i] / df_l2_norm
+        tf_matrix[voca_terms[k]][i] = tf_matrix[voca_terms[k]][i] / doc_L2_norm
+
 
 doc_visit_set = []
+
 for i in range(len(weight_query)):
     voc_position = key_list.index(query_key[i])
-    for j in range(len(tf_matrix[query_key[i]])):
-        score[j] = score[j] + (weight_query[i][query_key[i]] * tf_matrix[query_key[i]][j])
 
-tuple_score = []
+    for j in range(len(tf_matrix[query_key[i]])):
+        score[j] += (weight_query[i][query_key[i]] * tf_matrix[query_key[i]][j])
+
+scoreSet = []
+
 for doc_id, score in enumerate(score):
-    tuple_score.append((doc_id+1, score))
+    scoreSet.append((doc_id+1, score))
 
 # rank 정렬
-tuple_score.sort(key = lambda x: x[1], reverse = True)
-# print('weight_query: ', weight_query)
+scoreSet.sort(key = lambda x: x[1], reverse = True)
 print("'", query, "'에 대한 검색 결과 Rank ******")
 
 # rank 상위 5개 출력
-for rank in tuple_score[0:5]:
-    print(rank[0])
+for rank in scoreSet[0:5]:
+    print(rank)
+    # print(rank[0])
