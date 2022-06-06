@@ -4,14 +4,18 @@ import collections
 import numpy as np
 from konlpy.tag import *
 from konlpy.corpus import kolaw
+# from konlpy.tag import Komoran
+from PyKomoran import *
 from parse import *
 import operator
 
 DOC_SIZE = 100
 # 형태소 분석기
 okt = Okt()
+komoran = Komoran("STABLE")
+komoran.set_user_dic('.')
 
-query = '아폴론 남매인 신의 이름은?'
+query = '마굴리스'
 
 morphList = ['Noun', 'Verb', 'Number']
 voca = {} # 단어 당 나온 docID
@@ -56,6 +60,7 @@ for contents in doc:
 # content 검색
 for contents in doc:
     pos_list = okt.pos(contents['content'])
+    k_pos_list = komoran.nouns(contents['content'])
 
     for morphs in pos_list:
         docCnt = voca.get(morphs[0])
@@ -66,6 +71,14 @@ for contents in doc:
                 voca[morphs[0]] = []
             voca[morphs[0]].append(int(contents['docID']))
 
+    for morphs in k_pos_list:
+        docCnt = voca.get(morphs)
+
+        if docCnt == None:
+            voca[morphs] = []
+        voca[morphs].append(int(contents['docID']))
+
+# print(voca)
 #biwords voca에 추가할지?
 
 # tf-idf 계산
@@ -97,7 +110,9 @@ key_list = list(voca)
 
 # 쿼리 형태소 분석
 query_morphs = okt.pos(query)
+k_query_morphs = komoran.nouns(query)
 queryList = [morphs for morphs in query_morphs if morphs[1] in morphList]
+queryList.append(k_query_morphs)
 
 query_key = [] # query의 형태소 분해된 결과
 query_vector = [0] * len(voca)
@@ -107,9 +122,19 @@ for morphs in query_morphs:
     if morphs[1] in morphList:
         query_key.append(morphs[0])
 
+for morphs in k_query_morphs:
+    query_key.append(morphs)
+
+# 중복 제거
+query_key = set(query_key)
+query_key = list(query_key)
+
+# print(query_key)
+
 # query tf 계산.
 for i in range(len(query_key)):
-    query_vector[key_list.index(query_key[i])] += 1
+    if query_key[i] in key_list:
+        query_vector[key_list.index(query_key[i])] += 1
 
 # tf weight 계산
 for i in range(len(query_vector)):
@@ -122,26 +147,32 @@ weight_query = []
 
 for i in range(len(query_key)):
     # query term 위치
-    voc_position = key_list.index(query_key[i])
-    # query term의 tf, idf 값 가져오기
-    tf_qterm = query_vector[voc_position]
-    idf_qterm = voca[query_key[i]][-1]
+    if query_key[i] in key_list:
+        voc_position = key_list.index(query_key[i])
+        # query term의 tf, idf 값 가져오기
+        tf_qterm = query_vector[voc_position]
+        idf_qterm = voca[query_key[i]][-1]
 
-    # tf * idf 계산
-    weight_query.append({query_key[i] : float(tf_qterm) * float(idf_qterm)})
+        # tf * idf 계산
+        weight_query.append({query_key[i]: float(tf_qterm) * float(idf_qterm)})
+    else :
+        weight_query.append({query_key[i]: 0})
 
 # Length Normalization
 
 # query L2 norm 구하기
 L2_temp = 0
-
 for i in range(len(weight_query)):
-    L2_temp += pow(weight_query[i][query_key[i]], 2)
+    # q^2
+    if query_key[i] in key_list:
+        L2_temp += pow(weight_query[i][query_key[i]], 2)
 
+# 루트 q^2
 query_L2_norm = pow(L2_temp, 1/2)
 
 for i in range(len(weight_query)):
-    weight_query[i][query_key[i]] = weight_query[i][query_key[i]] / query_L2_norm
+    if query_key[i] in key_list:
+        weight_query[i][query_key[i]] = weight_query[i][query_key[i]] / query_L2_norm
 
 # doc L2 norm 구하기
 voca_terms = list(voca.keys())
@@ -158,15 +189,13 @@ for i in range(DOC_SIZE):
     for k in range(len(voca)):
         tf_matrix[voca_terms[k]][i] = tf_matrix[voca_terms[k]][i] / doc_L2_norm
 
-
-doc_visit_set = []
-
+# cos 값 구하기
 for i in range(len(weight_query)):
-    voc_position = key_list.index(query_key[i])
+    if query_key[i] in key_list:
+        for j in range(len(tf_matrix[query_key[i]])):
+            score[j] += (weight_query[i][query_key[i]] * tf_matrix[query_key[i]][j])
 
-    for j in range(len(tf_matrix[query_key[i]])):
-        score[j] += (weight_query[i][query_key[i]] * tf_matrix[query_key[i]][j])
-
+# 계산 결과 저장
 scoreSet = []
 
 for doc_id, score in enumerate(score):
